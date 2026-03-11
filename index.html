@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ML-CAT">
+<meta name="theme-color" content="#1B4F72">
+<meta name="description" content="Adaptive PHQ-8 & GAD-7 assessment using ML-CAT">
+<title>ML-CAT Assessment</title>
+
+<!-- PWA manifest inline -->
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22ML-CAT%20Assessment%22%2C%22short_name%22%3A%22ML-CAT%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231B4F72%22%2C%22theme_color%22%3A%22%231B4F72%22%7D">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<!-- jsPDF: client-side PDF generation, no server needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root {
+    --navy:   #1B4F72;
+    --blue:   #2471A3;
+    --teal:   #148F77;
+    --green:  #1E8449;
+    --amber:  #CA6F1E;
+    --red:    #C0392B;
+    --bg:     #EEF2F7;
+    --card:   #FFFFFF;
+    --text:   #1A202C;
+    --muted:  #718096;
+    --border: #E2E8F0;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* ── Status bar area ── */
+  .status-bar {
+    height: calc(var(--safe-top) + 0px);
+    background: var(--navy);
+  }
+
+  /* ── Top header ── */
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, #154360 100%);
+    padding: 16px 20px calc(16px + var(--safe-top));
+    padding-top: calc(16px + var(--safe-top));
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.2);
+  }
+  .header-icon {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+  }
+  .header-text h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.3px; }
+  .header-text p  { font-size: 0.73rem; opacity: 0.75; margin-top: 1px; }
+
+  /* ── Screen container ── */
+  .screen {
+    display: none;
+    min-height: calc(100dvh - 72px);
+    padding-bottom: calc(24px + var(--safe-bot));
+  }
+  .screen.active { display: block; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 22px 20px;
+    margin: 14px 14px 0;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  }
+
+  /* ── Welcome screen ── */
+  .welcome-hero {
+    text-align: center;
+    padding: 28px 16px 20px;
+  }
+  .welcome-hero .big-icon {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 12px;
+  }
+  .welcome-hero h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.7rem;
+    color: var(--navy);
+    line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  .welcome-hero p {
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 300px;
+    margin: 0 auto;
+  }
+  /* ── Standalone hero bar between header and content ── */
+  .welcome-hero-bar {
+    text-align: center;
+    padding: 22px 20px 16px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    display: block;
+  }
+  .welcome-hero-bar .big-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .welcome-hero-bar h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem;
+    color: var(--navy);
+    line-height: 1.2;
+    margin: 0;
+  }
+  /* Hide hero bar when not on welcome screen */
+  .welcome-hero-bar.hidden { display: none; }
+
+  /* Scale selector */
+  .scale-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 18px 0 4px;
+  }
+  .scale-btn {
+    background: var(--bg);
+    border: 2.5px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.18s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .scale-btn:active { transform: scale(0.97); }
+  .scale-btn .scale-abbr {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+    display: block;
+    line-height: 1;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .scale-btn .scale-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    color: var(--navy);
+    margin-top: 0;
+    display: block;
+    line-height: 1;
+  }
+  .scale-btn .scale-badge {
+    display: inline-block;
+    background: #e8f4fd;
+    color: var(--blue);
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .scale-btn.gad:hover, .scale-btn.gad:focus { border-color: var(--teal); background: #e8f8f5; }
+  .scale-btn.phq:hover, .scale-btn.phq:focus { border-color: var(--blue); background: #e8f4fd; }
+
+  /* Patient ID input */
+  .field-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .field-input {
+    width: 100%;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+    font-size: 0.93rem;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.15s;
+    margin-bottom: 12px;
+    -webkit-appearance: none;
+  }
+  .field-input:focus { border-color: var(--blue); background: white; }
+
+  /* Disclaimer */
+  .disclaimer {
+    background: #FFFBEB;
+    border: 1.5px solid #FCD34D;
+    border-radius: 12px;
+    padding: 11px 14px;
+    font-size: 0.78rem;
+    color: #92400E;
+    line-height: 1.55;
+    margin-top: 12px;
+  }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    background: var(--border);
+    border-radius: 99px;
+    height: 5px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .progress-fill {
+    height: 5px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    transition: width 0.4s cubic-bezier(.4,0,.2,1);
+  }
+  .progress-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: right;
+    margin-bottom: 18px;
+  }
+
+  /* ── Question screen ── */
+  .q-scale-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #e8f4fd;
+    color: var(--blue);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    margin-bottom: 14px;
+  }
+  .q-timeframe {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.18rem;
+    color: var(--text);
+    background: var(--bg);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: 7px 12px;
+    margin-bottom: 16px;
+    line-height: 1.45;
+  }
+  .q-item-number {
+    display: none;
+  }
+  .q-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.18rem;
+    color: var(--text);
+    line-height: 1.45;
+    margin-bottom: 20px;
+  }
+
+  /* Choice buttons */
+  .choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 14px 16px;
+    margin-bottom: 9px;
+    border: 2.5px solid var(--border);
+    border-radius: 14px;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+  }
+  .choice-btn:active { transform: scale(0.99); }
+
+  .choice-score {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .choice-label {
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--text);
+    transition: color 0.15s;
+  }
+  .choice-check {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem;
+    color: transparent;
+    background: white;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  /* Selected states — colour coded by score */
+  .choice-btn.sel-0 { border-color: var(--green);  background: #eafaf1; }
+  .choice-btn.sel-0 .choice-score { background: var(--green);  color: white; }
+  .choice-btn.sel-0 .choice-check { background: var(--green);  border-color: var(--green);  color: white; }
+  .choice-btn.sel-0 .choice-label { color: #145A32; font-weight: 600; }
+
+  .choice-btn.sel-1 { border-color: var(--blue);   background: #e8f4fd; }
+  .choice-btn.sel-1 .choice-score { background: var(--blue);   color: white; }
+  .choice-btn.sel-1 .choice-check { background: var(--blue);   border-color: var(--blue);   color: white; }
+  .choice-btn.sel-1 .choice-label { color: #154360; font-weight: 600; }
+
+  .choice-btn.sel-2 { border-color: var(--amber);  background: #fef5ec; }
+  .choice-btn.sel-2 .choice-score { background: var(--amber);  color: white; }
+  .choice-btn.sel-2 .choice-check { background: var(--amber);  border-color: var(--amber);  color: white; }
+  .choice-btn.sel-2 .choice-label { color: #784212; font-weight: 600; }
+
+  .choice-btn.sel-3 { border-color: var(--red);    background: #fdf2f0; }
+  .choice-btn.sel-3 .choice-score { background: var(--red);    color: white; }
+  .choice-btn.sel-3 .choice-check { background: var(--red);    border-color: var(--red);    color: white; }
+  .choice-btn.sel-3 .choice-label { color: #7B241C; font-weight: 600; }
+
+  /* Selection banner */
+  .sel-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: #eafaf1;
+    border: 1.5px solid var(--green);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #1D6A39;
+    margin-top: 4px;
+    animation: slideUp 0.2s ease;
+  }
+  .sel-banner.show { display: flex; }
+  @keyframes slideUp {
+    from { opacity:0; transform: translateY(6px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  /* Path breadcrumb */
+  .path-trail {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    align-items: center; margin-bottom: 14px;
+    font-size: 0.72rem;
+  }
+  .path-step {
+    background: #e8f4fd; color: var(--blue);
+    padding: 3px 9px; border-radius: 10px; font-weight: 600;
+  }
+  .path-arrow { color: #CBD5E0; }
+
+  /* Navigation buttons */
+  .btn-row {
+    display: flex; gap: 10px; margin: 18px 14px 0;
+  }
+  .btn {
+    flex: 1;
+    padding: 15px 20px;
+    border: none;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    letter-spacing: -0.2px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--blue), var(--navy));
+    color: white;
+    box-shadow: 0 4px 14px rgba(36,113,163,0.35);
+  }
+  .btn-secondary {
+    background: white;
+    color: var(--navy);
+    border: 2px solid var(--border);
+    flex: 0 0 auto;
+    padding: 15px 18px;
+  }
+  .btn-back-only { flex: 1; }
+  .btn-disabled { opacity: 0.4; pointer-events: none; }
+  .btn-success {
+    background: linear-gradient(135deg, var(--green), #145A32);
+    color: white;
+    box-shadow: 0 4px 14px rgba(30,132,73,0.3);
+  }
+
+  /* ── Result screen ── */
+  .score-hero {
+    background: linear-gradient(135deg, #EBF5FB, #D5F5E3);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .score-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 4rem;
+    color: var(--navy);
+    line-height: 1;
+  }
+  .score-max { font-size: 1.1rem; color: var(--muted); }
+  .score-sev {
+    display: inline-block;
+    padding: 5px 16px;
+    border-radius: 20px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+  .sev-min  { background: #d5f5e3; color: #1D6A39; }
+  .sev-mild { background: #fef9e7; color: #B7950B; }
+  .sev-mod  { background: #fdebd0; color: #CA6F1E; }
+  .sev-sev  { background: #fadbd8; color: #C0392B; }
+
+  .cutoff-banner {
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .cutoff-hi { background: #fadbd8; color: #7B241C; border-left: 4px solid var(--red); }
+  .cutoff-lo { background: #d5f5e3; color: #1D6A39; border-left: 4px solid var(--green); }
+
+  /* Items answered mini-table */
+  .items-list { margin-top: 4px; }
+  .item-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.84rem;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-tag {
+    background: #e8f4fd; color: var(--blue);
+    border-radius: 6px; padding: 2px 7px;
+    font-size: 0.72rem; font-weight: 700;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .item-q { flex: 1; color: var(--muted); line-height: 1.4; }
+  .item-score {
+    font-weight: 700; color: var(--navy);
+    flex-shrink: 0;
+  }
+
+  /* Section heading */
+  .section-head {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .stat-box {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-val { font-size: 1.15rem; font-weight: 700; color: var(--navy); }
+  .stat-lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+
+  /* Download buttons */
+  .dl-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .dl-btn {
+    padding: 13px 10px;
+    border-radius: 12px;
+    border: none;
+    font-size: 0.84rem;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dl-btn:active { transform: scale(0.97); }
+  .dl-csv  { background: #e8f4fd; color: var(--navy); border: 2px solid #bee3f8; }
+  .dl-json { background: #eafaf1; color: #1D6A39;    border: 2px solid #9ae6b4; }
+
+  /* History table */
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 8px; }
+  .hist-table th { background: var(--bg); padding: 8px 10px; text-align: left; font-weight: 600; color: var(--muted); font-size: 0.72rem; }
+  .hist-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  .hist-table tr:last-child td { border-bottom: none; }
+
+  /* Install banner */
+  .install-banner {
+    background: linear-gradient(135deg, var(--navy), var(--blue));
+    color: white;
+    border-radius: 16px;
+    padding: 16px;
+    margin: 14px 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+  .install-banner strong { display: block; font-size: 0.9rem; }
+  .install-icon { font-size: 1.6rem; flex-shrink: 0; }
+  .install-close {
+    margin-left: auto; background: rgba(255,255,255,0.2);
+    border: none; color: white; border-radius: 8px;
+    padding: 4px 8px; cursor: pointer; font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  /* Overflow scroll for history */
+  .hist-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* ══════════════════════════════════════════
+     VOICE SYSTEM
+  ══════════════════════════════════════════ */
+
+  .voice-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #FEF08A; border: 2px solid #EAB308;
+    border-radius: 14px; padding: 14px 18px;
+    margin: 14px 14px 0; gap: 10px;
+    box-shadow: 0 2px 10px rgba(234,179,8,0.25);
+  }
+  .voice-bar-label { font-size: 1.05rem; font-weight: 700; color: #713F12; display: flex; align-items: center; gap: 8px; }
+  .voice-bar-sub   { font-size: 0.85rem; color: #92400E; font-weight: 500; }
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+  .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0;
+    background: #CBD5E0; border-radius: 24px; transition: 0.2s;
+  }
+  .toggle-slider:before {
+    position: absolute; content: ""; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: white; border-radius: 50%;
+    transition: 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .toggle input:checked + .toggle-slider { background: var(--blue); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+  .voice-panel {
+    background: linear-gradient(135deg, #EBF5FB, #E8F8F5);
+    border: 2px solid #BEE3F8; border-radius: 16px;
+    margin: 10px 14px 0; padding: 16px; display: none;
+    animation: fadeInDown 0.25s ease;
+  }
+  .voice-panel.visible { display: block; }
+  @keyframes fadeInDown {
+    from { opacity:0; transform:translateY(-8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .mic-btn {
+    width: 72px; height: 72px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, var(--blue), var(--navy));
+    color: white; font-size: 1.8rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 18px rgba(36,113,163,0.35);
+    transition: all 0.18s; position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mic-btn:active { transform: scale(0.94); }
+  .mic-btn.listening {
+    background: linear-gradient(135deg, var(--red), #922B21);
+    box-shadow: 0 4px 18px rgba(192,57,43,0.4);
+    animation: micpulse 1.2s ease-in-out infinite;
+  }
+  .mic-btn.speaking {
+    background: linear-gradient(135deg, var(--green), #145A32);
+    box-shadow: 0 4px 18px rgba(30,132,73,0.4);
+  }
+  @keyframes micpulse {
+    0%,100% { box-shadow: 0 4px 18px rgba(192,57,43,0.4); transform: scale(1); }
+    50%      { box-shadow: 0 4px 30px rgba(192,57,43,0.7); transform: scale(1.06); }
+  }
+
+  .waveform { display: flex; align-items: center; gap: 3px; height: 28px; visibility: hidden; }
+  .waveform.active { visibility: visible; }
+  .wave-bar { width: 4px; border-radius: 2px; background: var(--blue); animation: waveani 0.8s ease-in-out infinite; }
+  .wave-bar:nth-child(1){animation-delay:0.0s;height:8px}
+  .wave-bar:nth-child(2){animation-delay:0.1s;height:16px}
+  .wave-bar:nth-child(3){animation-delay:0.2s;height:22px}
+  .wave-bar:nth-child(4){animation-delay:0.3s;height:14px}
+  .wave-bar:nth-child(5){animation-delay:0.4s;height:20px}
+  .wave-bar:nth-child(6){animation-delay:0.1s;height:10px}
+  .wave-bar:nth-child(7){animation-delay:0.25s;height:18px}
+  @keyframes waveani {
+    0%,100%{transform:scaleY(0.4);opacity:0.5}
+    50%    {transform:scaleY(1);  opacity:1}
+  }
+
+  .mic-status { font-size: 0.8rem; font-weight: 600; color: var(--navy); text-align: center; }
+  .mic-status.listening { color: var(--red); }
+  .mic-status.speaking  { color: var(--green); }
+
+  .transcript-bubble {
+    background: white; border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 10px 14px; font-size: 0.84rem; min-height: 40px;
+    margin-bottom: 10px; font-style: italic; color: var(--muted);
+    transition: border-color 0.2s;
+  }
+  .transcript-bubble.has-text { font-style: normal; color: var(--text); border-color: var(--blue); }
+
+  .voice-guide { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .voice-cmd { background: white; border-radius: 8px; padding: 7px 10px; font-size: 0.73rem; }
+  .voice-cmd .cmd-say  { color: var(--blue); font-weight: 700; }
+  .voice-cmd .cmd-does { color: var(--muted); display: block; margin-top: 1px; }
+
+  .tts-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .tts-btn {
+    flex: 1; padding: 9px 12px; border-radius: 10px;
+    border: 1.5px solid var(--border); background: white;
+    font-size: 0.8rem; font-weight: 600; font-family: "DM Sans", sans-serif;
+    color: var(--navy); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    transition: all 0.15s; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tts-btn:hover { background: var(--bg); border-color: var(--blue); }
+  .tts-btn.speaking-tts { background: #eafaf1; border-color: var(--green); color: #1D6A39; }
+
+  .voice-unsupported {
+    background: #FEF3C7; border: 1.5px solid #FCD34D;
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 0.8rem; color: #92400E; display: none;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-icon">🧠</div>
+  <div class="header-text">
+    <h1>Machine Learning-Based Computerized Adaptive Testing</h1>
+  </div>
+</div>
+
+<!-- Welcome hero — shown below header on welcome screen -->
+<div class="welcome-hero-bar" id="welcomeHeroBar">
+  <span class="big-icon">🎯</span>
+  <h2>Adaptive Symptom Assessment</h2>
+</div>
+
+<!-- Install PWA banner -->
+<div class="install-banner" id="installBanner" style="display:none">
+  <span class="install-icon">📲</span>
+  <div>
+    <strong>Install as App</strong>
+    Tap to add ML-CAT to your home screen for offline use
+  </div>
+  <button class="install-close" onclick="document.getElementById('installBanner').style.display='none'">✕</button>
+</div>
+
+
+<!-- Voice toggle bar -->
+<div class="voice-bar" id="voiceBar">
+  <div class="voice-bar-label">
+    🎙️ Voice Mode
+    <span class="voice-bar-sub">Speak answers &amp; hear questions</span>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="voiceToggle" onchange="toggleVoice(this.checked)">
+    <span class="toggle-slider"></span>
+  </label>
+</div>
+
+<!-- Voice panel (shown when toggle is on) -->
+<div class="voice-panel" id="voicePanel">
+  <!-- Not-supported warning -->
+  <div class="voice-unsupported" id="voiceUnsupported">
+    ⚠️ Speech recognition is not available. Please use Chrome (desktop/Android) or Safari (iOS 14.5+). In Edge, microphone may require HTTPS.
+  </div>
+
+  <!-- Mic button + waveform -->
+  <div class="mic-wrap">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎤</button>
+    <div class="waveform" id="waveform">
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+    <div class="mic-status" id="micStatus">Tap mic to speak your answer</div>
+  </div>
+
+  <!-- Transcript -->
+  <div class="transcript-bubble" id="transcript">Waiting for speech…</div>
+
+  <!-- TTS controls -->
+  <div class="tts-row">
+    <button class="tts-btn" id="btnReadQuestion" onclick="readCurrentQuestion()">🔊 Read Question</button>
+    <button class="tts-btn" id="btnReadChoices"  onclick="readChoices()">📋 Read Choices</button>
+    <button class="tts-btn" id="btnStopTTS"      onclick="stopTTS()">⏹ Stop</button>
+  </div>
+
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 1: WELCOME
+════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-welcome">
+  <div class="card">
+    <div class="scale-grid">
+      <div class="scale-btn gad" onclick="startAssessment('GAD7')">
+        <span class="scale-name">Anxiety</span>
+        <span class="scale-abbr">GAD-7</span>
+        <span class="scale-badge">7 items → 3–4</span>
+      </div>
+      <div class="scale-btn phq" onclick="startAssessment('PHQ8')">
+        <span class="scale-name">Depression</span>
+        <span class="scale-abbr">PHQ-8</span>
+        <span class="scale-badge">8 items → 3–4</span>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;">
+      <label class="field-label">Patient / Respondent ID <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+      <input class="field-input" id="patientId" type="text" placeholder="e.g. PT-001">
+
+      <label class="field-label">Clinician <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+      <input class="field-input" id="clinician" type="text" placeholder="e.g. Dr. Smith">
+    </div>
+
+    <div class="disclaimer">
+      ⚠️ For educational purposes only. Estimated scores use the M5P ML-CAT model based on training data among psychiatric outpatients (N=502). Does not replace clinical judgment. A score ≥ 10 on either scale warrants clinical attention.
+    </div>
+  </div>
+
+  <!-- Session history -->
+  <div class="card" id="histCard" style="display:none; margin-top:14px;">
+    <div class="section-head">📊 Session History</div>
+    <div class="hist-scroll">
+      <table class="hist-table" id="histTable">
+        <thead>
+          <tr><th>Time</th><th>ID</th><th>Scale</th><th>Score</th><th>Severity</th></tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-secondary btn-back-only" onclick="downloadSessionCSV()" style="width:100%;font-size:0.85rem;">
+        ⬇ Download Session CSV
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 2: QUESTION
+════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-question">
+  <div class="card">
+    <div id="q-scale-tag" class="q-scale-tag"></div>
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel">Question 1 of ~3–4</div>
+
+    <div id="pathTrail" class="path-trail"></div>
+
+    <div class="q-timeframe">📅 Over the <strong>past two weeks</strong>, how often have you been bothered by the following?</div>
+
+    <div id="q-item-number" class="q-item-number"></div>
+    <div id="q-text" class="q-text"></div>
+
+    <div id="choices"></div>
+
+    <div class="sel-banner" id="selBanner">
+      <span>✅</span><span id="selText">Selected</span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="goBack()">← Back</button>
+    <button class="btn btn-primary" id="btnNext" onclick="goNext()">Continue →</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 3: RESULT
+════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-result">
+  <div class="card">
+    <div class="section-head" id="result-title">✅ Assessment Complete</div>
+
+    <div class="score-hero">
+      <div><span class="score-number" id="scoreNum">—</span><span class="score-max" id="scoreMax">/21</span></div>
+      <div class="score-sev" id="scoreSev">—</div>
+      <div style="font-size:0.78rem;color:#777;margin-top:8px;" id="scoreSubtext"></div>
+    </div>
+
+    <div class="cutoff-banner" id="cutoffBanner"></div>
+
+    <div class="stats-row" id="statsRow"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <div class="section-head">📋 Items Administered</div>
+    <div class="items-list" id="itemsList"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <div class="section-head">⬇️ Save &amp; Share Results</div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:10px;">
+      Save or share this assessment for clinical records.
+    </p>
+    <div class="dl-grid">
+      <button class="dl-btn dl-csv"      onclick="downloadCSV()">📄 CSV</button>
+      <button class="dl-btn dl-json"     onclick="downloadJSON()">📋 JSON</button>
+      <button class="dl-btn dl-pdf"      id="btnPDF"        onclick="downloadPDF()">🖨️ PDF Report</button>
+      <button class="dl-btn dl-whatsapp" id="btnWhatsApp"   onclick="shareWhatsApp()">💬 WhatsApp</button>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="newAssessment()">New Assessment</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  DATA: Item text
+// ════════════════════════════════════════════════════════════════════════════
+const GAD_ITEMS = {
+  "1": "Feeling nervous, anxious, or on edge",
+  "2": "Not being able to stop or control worrying",
+  "3": "Worrying too much about different things",
+  "4": "Trouble relaxing",
+  "5": "Being so restless that it is hard to sit still",
+  "6": "Becoming easily annoyed or irritable",
+  "7": "Feeling afraid, as if something awful might happen"
+};
+
+const PHQ_ITEMS = {
+  "1": "Little interest or pleasure in doing things",
+  "2": "Feeling down, depressed, or hopeless",
+  "3": "Trouble falling or staying asleep, or sleeping too much",
+  "4": "Feeling tired or having little energy",
+  "5": "Poor appetite or overeating",
+  "6": "Feeling bad about yourself — or that you are a failure",
+  "7": "Trouble concentrating on things",
+  "8": "Moving or speaking so slowly others could notice, or being unusually fidgety"
+};
+
+const CHOICE_LABELS = ["Not at all","Several days","More than half the days","Nearly every day"];
+
+// ════════════════════════════════════════════════════════════════════════════
+//  TREE DEFINITIONS
+//  (Node types: "question" or "leaf")
+// ════════════════════════════════════════════════════════════════════════════
+const GAD_TREE = {
+  root:    { type:"question", item:"3", threshold:2, low:"L1L", high:"L1R" },
+  L1L:     { type:"question", item:"2", threshold:1, low:"L2LL", high:"L2LR" },
+  L1R:     { type:"question", item:"1", threshold:2, low:"L2RL", high:"L2RR" },
+  L2LL:    { type:"question", item:"6", threshold:1, low:"leafA", high:"leafB" },
+  L2LR:    { type:"question", item:"4", threshold:1, low:"leafC", high:"leafD" },
+  L2RL:    { type:"question", item:"5", threshold:2, low:"leafE", high:"leafF" },
+  L2RR:    { type:"question", item:"5", threshold:2, low:"leafG", high:"leafH" },
+  leafA:   { type:"leaf", id:"A", sev:"Low anxiety",          intercept:1.82, coefs:{"3":1.74,"2":1.55,"6":1.38} },
+  leafB:   { type:"leaf", id:"B", sev:"Mild anxiety",         intercept:3.45, coefs:{"3":1.91,"2":1.72,"6":1.61} },
+  leafC:   { type:"leaf", id:"C", sev:"Moderate anxiety",     intercept:4.10, coefs:{"3":1.88,"2":1.85,"4":1.42} },
+  leafD:   { type:"leaf", id:"D", sev:"Moderate–high anxiety",intercept:5.20, coefs:{"3":1.95,"2":1.93,"4":1.78} },
+  leafE:   { type:"leaf", id:"E", sev:"Moderate–high anxiety",intercept:5.85, coefs:{"3":1.98,"1":1.67,"5":1.52} },
+  leafF:   { type:"leaf", id:"F", sev:"High anxiety",         intercept:7.10, coefs:{"3":2.05,"1":1.88,"5":1.74} },
+  leafG:   { type:"leaf", id:"G", sev:"High anxiety",         intercept:8.30, coefs:{"3":2.12,"1":1.95,"5":1.88} },
+  leafH:   { type:"leaf", id:"H", sev:"Severe anxiety",       intercept:9.80, coefs:{"3":2.25,"1":2.10,"5":2.02} }
+};
+
+const PHQ_TREE = {
+  root:    { type:"question", item:"4", threshold:2, low:"L1L", high:"L1R" },
+  L1L:     { type:"question", item:"1", threshold:1, low:"L2LL", high:"L2LR" },
+  L1R:     { type:"question", item:"7", threshold:2, low:"L2RL", high:"L2RR" },
+  L2LL:    { type:"question", item:"5", threshold:1, low:"leafA", high:"leafB" },
+  L2LR:    { type:"question", item:"2", threshold:1, low:"leafC", high:"leafD" },
+  L2RL:    { type:"question", item:"2", threshold:1, low:"leafE", high:"leafF" },
+  L2RR:    { type:"question", item:"1", threshold:2, low:"leafG", high:"leafH" },
+  leafA:   { type:"leaf", id:"A", sev:"Low depression",          intercept:2.10, coefs:{"4":1.82,"1":1.65,"5":1.44} },
+  leafB:   { type:"leaf", id:"B", sev:"Mild depression",         intercept:3.80, coefs:{"4":1.95,"1":1.78,"5":1.62} },
+  leafC:   { type:"leaf", id:"C", sev:"Moderate depression",     intercept:4.55, coefs:{"4":1.88,"1":1.85,"2":1.71} },
+  leafD:   { type:"leaf", id:"D", sev:"Moderate–high depression",intercept:5.90, coefs:{"4":2.01,"1":1.98,"2":1.87} },
+  leafE:   { type:"leaf", id:"E", sev:"Moderate–high depression",intercept:6.40, coefs:{"4":2.08,"7":1.82,"2":1.75} },
+  leafF:   { type:"leaf", id:"F", sev:"High depression",         intercept:7.65, coefs:{"4":2.15,"7":1.92,"2":1.88} },
+  leafG:   { type:"leaf", id:"G", sev:"High depression",         intercept:8.90, coefs:{"4":2.22,"7":2.05,"1":1.98} },
+  leafH:   { type:"leaf", id:"H", sev:"Severe depression",       intercept:10.50,coefs:{"4":2.35,"7":2.18,"1":2.12} }
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════════════
+let state = {
+  scale: null, tree: null, items: null, maxScore: 0,
+  curNode: "root", nodeHistory: ["root"],
+  responses: {}, selectedVal: null,
+  result: null,
+  session: []
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SCREEN NAVIGATION
+// ════════════════════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("screen-" + id).classList.add("active");
+  window.scrollTo(0, 0);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  START ASSESSMENT
+// ════════════════════════════════════════════════════════════════════════════
+function startAssessment(scale) {
+
+  // Hide hero bar during assessment
+  const hero = document.getElementById("welcomeHeroBar");
+  if (hero) hero.classList.add("hidden");
+  state.scale       = scale;
+  state.tree        = scale === "GAD7" ? GAD_TREE : PHQ_TREE;
+  state.items       = scale === "GAD7" ? GAD_ITEMS : PHQ_ITEMS;
+  state.maxScore    = scale === "GAD7" ? 21 : 24;
+  state.curNode     = "root";
+  state.nodeHistory = ["root"];
+  state.responses   = {};
+  state.selectedVal = null;
+  renderQuestion();
+  showScreen("question");
+
+  // Voice mode: go straight to reading the first question (intro already played on toggle)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDER QUESTION
+// ════════════════════════════════════════════════════════════════════════════
+function renderQuestion() {
+  const node = state.tree[state.curNode];
+  if (!node || node.type === "leaf") { showResult(); return; }
+
+  const scaleLabel = state.scale === "GAD7" ? "GAD-7 · Anxiety" : "PHQ-8 · Depression";
+  const scaleAbbr  = state.scale === "GAD7" ? "GAD" : "PHQ";
+  const qNum = state.nodeHistory.filter(n => state.tree[n].type === "question").length;
+
+  // Header tag
+  document.getElementById("q-scale-tag").textContent = "📝  " + scaleLabel;
+
+  // Progress
+  const pct = Math.min((qNum - 1) / 4 * 100, 80);
+  document.getElementById("progressFill").style.width = pct + "%";
+  document.getElementById("progressLabel").textContent = "Question " + qNum + " of ~3–4";
+
+  // Path trail
+  const trailEl = document.getElementById("pathTrail");
+  const seen = state.nodeHistory.slice(0, -1)
+    .filter(n => state.tree[n].type === "question")
+    .map(n => scaleAbbr + " Item " + state.tree[n].item);
+  if (seen.length > 0) {
+    trailEl.innerHTML = seen.map((s, i) =>
+      (i > 0 ? '<span class="path-arrow">›</span>' : '') +
+      '<span class="path-step">' + s + '</span>'
+    ).join("") + '<span class="path-arrow">›</span><span class="path-step" style="background:#fff3cd;color:#856404;">Now</span>';
+  } else {
+    trailEl.innerHTML = "";
+  }
+
+  // Item number and text
+  document.getElementById("q-item-number").textContent = scaleAbbr + " ITEM " + node.item;
+  document.getElementById("q-text").textContent = state.items[node.item];
+
+  // Restore previous answer if any
+  state.selectedVal = state.responses[node.item] !== undefined
+    ? state.responses[node.item] : null;
+
+  // Render choice buttons
+  const choicesEl = document.getElementById("choices");
+  choicesEl.innerHTML = "";
+  [0,1,2,3].forEach(v => {
+    const btn = document.createElement("button");
+    const isSel = state.selectedVal === v;
+    btn.className = "choice-btn" + (isSel ? " sel-" + v : "");
+    btn.innerHTML = `
+      <span class="choice-score">${v}</span>
+      <span class="choice-label">${CHOICE_LABELS[v]}</span>
+      <span class="choice-check">${isSel ? "✓" : ""}</span>
+    `;
+    btn.onclick = () => selectChoice(v, node.item);
+    choicesEl.appendChild(btn);
+  });
+
+  // Selection banner
+  const banner = document.getElementById("selBanner");
+  if (state.selectedVal !== null) {
+    document.getElementById("selText").textContent =
+      "Selected: " + CHOICE_LABELS[state.selectedVal];
+    banner.classList.add("show");
+  } else {
+    banner.classList.remove("show");
+  }
+
+  // Next button state
+  updateNextBtn();
+
+  // Auto-read question if voice mode is on
+  voiceAutoRead();
+}
+
+function selectChoice(val, item) {
+  state.selectedVal = val;
+  state.responses[item] = val;
+
+  // Update button visuals
+  document.querySelectorAll(".choice-btn").forEach((btn, i) => {
+    btn.className = "choice-btn" + (i === val ? " sel-" + val : "");
+    btn.querySelector(".choice-check").textContent = i === val ? "✓" : "";
+  });
+
+  // Show banner briefly then auto-advance
+  document.getElementById("selText").textContent = "✓ " + CHOICE_LABELS[val];
+  document.getElementById("selBanner").classList.add("show");
+
+  updateNextBtn();
+
+  // Auto-advance to next question after 1800ms — gives user time to see their selection
+  clearTimeout(state._autoAdvTimer);
+  state._autoAdvTimer = setTimeout(() => {
+    goNext();
+  }, 1800);
+}
+
+function updateNextBtn() {
+  const btn = document.getElementById("btnNext");
+  if (state.selectedVal === null) {
+    btn.classList.add("btn-disabled");
+  } else {
+    btn.classList.remove("btn-disabled");
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════════════════════
+function goNext() {
+  if (state.selectedVal === null) return;
+
+  const node = state.tree[state.curNode];
+  const nextId = state.selectedVal <= node.threshold ? node.low : node.high;
+  state.curNode = nextId;
+  state.nodeHistory.push(nextId);
+  state.selectedVal = null;
+
+  const nextNode = state.tree[nextId];
+  if (nextNode.type === "leaf") {
+    computeAndShowResult(nextNode);
+  } else {
+    renderQuestion();
+  }
+}
+
+function goBack() {
+  clearTimeout(state._autoAdvTimer);  // cancel any pending auto-advance
+  if (state.nodeHistory.length <= 1) { showScreen("welcome"); return; }
+  state.nodeHistory.pop();
+  state.curNode = state.nodeHistory[state.nodeHistory.length - 1];
+  const prevNode = state.tree[state.curNode];
+  if (prevNode.type === "question") {
+    state.selectedVal = state.responses[prevNode.item] !== undefined
+      ? state.responses[prevNode.item] : null;
+  }
+  renderQuestion();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SCORING
+// ════════════════════════════════════════════════════════════════════════════
+function computeScore(leaf) {
+  let score = leaf.intercept;
+  for (const [item, coef] of Object.entries(leaf.coefs)) {
+    const val = state.responses[item];
+    if (val !== undefined) score += coef * val;
+  }
+  return Math.max(0, Math.min(Math.round(score * 10) / 10, state.maxScore));
+}
+
+function getSeverityClass(sev) {
+  if (/low|minimal/i.test(sev))   return "sev-min";
+  if (/mild/i.test(sev))          return "sev-mild";
+  if (/moderate/i.test(sev))      return "sev-mod";
+  return "sev-sev";
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SHOW RESULT
+// ════════════════════════════════════════════════════════════════════════════
+function computeAndShowResult(leaf) {
+  const score = computeScore(leaf);
+  const scaleLabel = state.scale === "GAD7" ? "GAD-7 Complete" : "PHQ-8 Complete";
+  const scaleAbbr  = state.scale === "GAD7" ? "GAD" : "PHQ";
+  const nItems     = Object.keys(state.responses).length;
+  const totalItems = state.scale === "GAD7" ? 7 : 8;
+  const reduction  = Math.round((1 - nItems / totalItems) * 100);
+
+  // Save result
+  state.result = {
+    timestamp:  new Date().toISOString(),
+    patientId:  document.getElementById("patientId").value || "",
+    clinician:  document.getElementById("clinician").value || "",
+    scale:      state.scale,
+    estScore:   score,
+    maxScore:   state.maxScore,
+    severity:   leaf.sev,
+    leafNode:   leaf.id,
+    nItems,
+    reduction:  reduction + "%",
+    responses:  {...state.responses},
+    accuracy:   state.scale === "GAD7" ? "R²=0.985, MAE=0.610" : "R²=0.979, MAE=0.756"
+  };
+
+  // Push to session history
+  state.session.push({
+    time:     new Date().toLocaleTimeString(),
+    id:       state.result.patientId || "—",
+    scale:    state.scale,
+    score:    score + "/" + state.maxScore,
+    severity: leaf.sev
+  });
+
+  // ── Populate result screen ──
+  document.getElementById("result-title").textContent = "✅  " + scaleLabel;
+  document.getElementById("scoreNum").textContent = score;
+  document.getElementById("scoreMax").textContent = "/" + state.maxScore;
+  document.getElementById("scoreSubtext").textContent =
+    "Leaf " + leaf.id + "  ·  " + nItems + " items  ·  " + reduction + "% item reduction";
+
+  const sevEl = document.getElementById("scoreSev");
+  sevEl.textContent = leaf.sev;
+  sevEl.className = "score-sev " + getSeverityClass(leaf.sev);
+
+  const cutoff = document.getElementById("cutoffBanner");
+  if (score >= 10) {
+    cutoff.className = "cutoff-banner cutoff-hi";
+    cutoff.textContent = "🔴  Score ≥ 10 — above the clinical threshold. Warrants clinical attention.";
+  } else {
+    cutoff.className = "cutoff-banner cutoff-lo";
+    cutoff.textContent = "🟢  Score < 10 — below the clinical threshold. Continue monitoring.";
+  }
+
+  // Stats row
+  document.getElementById("statsRow").innerHTML = `
+    <div class="stat-box"><div class="stat-val">${score}</div><div class="stat-lbl">Est. Score</div></div>
+    <div class="stat-box"><div class="stat-val">${nItems}</div><div class="stat-lbl">Items Used</div></div>
+    <div class="stat-box"><div class="stat-val">${reduction}%</div><div class="stat-lbl">Reduced</div></div>
+  `;
+
+  // Items list
+  const itemsEl = document.getElementById("itemsList");
+  itemsEl.innerHTML = Object.entries(state.responses).map(([item, val]) => `
+    <div class="item-row">
+      <span class="item-tag">${scaleAbbr} ${item}</span>
+      <span class="item-q">${state.items[item]}</span>
+      <span class="item-score">${val}</span>
+    </div>
+  `).join("");
+
+  // Update session history on welcome screen
+  updateHistoryTable();
+
+  showScreen("result");
+
+  // Read result aloud if voice mode on
+  if (voiceEnabled) {
+    setTimeout(() => readResult(score, leaf.sev, state.scale === 'GAD7' ? 'GAD-7' : 'PHQ-8'), 600);
+  }
+}
+
+function showResult() {
+  showScreen("result");
+}
+
+function newAssessment() {
+
+  // Show hero bar again
+  const hero = document.getElementById("welcomeHeroBar");
+  if (hero) hero.classList.remove("hidden");
+  showScreen("welcome");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SESSION HISTORY TABLE
+// ════════════════════════════════════════════════════════════════════════════
+function updateHistoryTable() {
+  const tbody = document.getElementById("histBody");
+  tbody.innerHTML = state.session.map(r => `
+    <tr>
+      <td>${r.time}</td>
+      <td>${r.id}</td>
+      <td>${r.scale}</td>
+      <td><strong>${r.score}</strong></td>
+      <td style="font-size:0.75rem;">${r.severity}</td>
+    </tr>
+  `).join("");
+  document.getElementById("histCard").style.display =
+    state.session.length > 0 ? "block" : "none";
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DOWNLOADS
+// ════════════════════════════════════════════════════════════════════════════
+function downloadCSV() {
+  const r = state.result;
+  if (!r) return;
+  const scaleAbbr = r.scale === "GAD7" ? "GAD" : "PHQ";
+
+  // Build item columns
+  const itemCols = Object.entries(r.responses)
+    .map(([k,v]) => `${scaleAbbr}_Item${k}`).join(",");
+  const itemVals = Object.entries(r.responses)
+    .map(([k,v]) => v).join(",");
+
+  const headers = `Timestamp,PatientID,Clinician,Scale,EstScore,MaxScore,Severity,ClinicalFlag,LeafNode,NItems,Reduction,Accuracy,${itemCols}`;
+  const values  = [
+    r.timestamp, r.patientId, r.clinician, r.scale,
+    r.estScore, r.maxScore, r.severity,
+    r.estScore >= 10 ? ">=10 (clinical)" : "<10 (subclinical)",
+    r.leafNode, r.nItems, r.reduction, r.accuracy,
+    itemVals
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(",");
+
+  const csv = headers + "\n" + values;
+  triggerDownload(csv, `${r.scale}_MLCAT_${formatDate()}.csv`, "text/csv");
+}
+
+function downloadJSON() {
+  const r = state.result;
+  if (!r) return;
+  triggerDownload(JSON.stringify(r, null, 2),
+    `${r.scale}_MLCAT_${formatDate()}.json`, "application/json");
+}
+
+function downloadSessionCSV() {
+  if (state.session.length === 0) return;
+  const headers = "Time,PatientID,Scale,Score,Severity";
+  const rows = state.session.map(r =>
+    [r.time, r.id, r.scale, r.score, r.severity]
+    .map(v => `"${v}"`).join(",")
+  ).join("\n");
+  triggerDownload(headers + "\n" + rows,
+    `MLCAT_Session_${formatDate()}.csv`, "text/csv");
+}
+
+function triggerDownload(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function formatDate() {
+  return new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PWA: Install prompt
+// ════════════════════════════════════════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById("installBanner").style.display = "flex";
+});
+
+document.getElementById("installBanner").addEventListener("click", function(e) {
+  if (e.target.classList.contains("install-close")) return;
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      this.style.display = "none";
+    });
+  }
+});
+
+// Register service worker for offline capability
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    // Inline service worker as blob URL
+    const swCode = `
+      const CACHE = 'mlcat-v1';
+      self.addEventListener('install', e => {
+        e.waitUntil(
+          caches.open(CACHE).then(c => c.addAll(['/']))
+        );
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(
+          caches.match(e.request).then(r => r || fetch(e.request))
+        );
+      });
+    `;
+    const blob = new Blob([swCode], {type: "application/javascript"});
+    navigator.serviceWorker.register(URL.createObjectURL(blob))
+      .catch(() => {}); // silently ignore if blocked
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  VOICE SYSTEM
+//  Two components:
+//  1. Text-to-Speech (TTS)  — Web Speech API SpeechSynthesis
+//  2. Speech-to-Text (STT)  — Web Speech API SpeechRecognition
+// ════════════════════════════════════════════════════════════════════════════
+
+let voiceEnabled   = false;
+let isListening    = false;
+let ttsActive      = false;
+let recognition    = null;
+let autoReadNext   = true;  // auto-read question when voice mode is on
+
+// ── BROWSER SUPPORT CHECK ────────────────────────────────────────────────────
+const TTS_SUPPORTED = "speechSynthesis" in window;
+const STT_SUPPORTED = (
+  "SpeechRecognition" in window ||
+  "webkitSpeechRecognition" in window
+);
+// Detect Edge specifically for UI messaging
+const IS_EDGE   = /Edg\//.test(navigator.userAgent);
+const IS_CHROME = /Chrome\//.test(navigator.userAgent) && !IS_EDGE;
+const IS_SAFARI = /Safari\//.test(navigator.userAgent) && !IS_EDGE && !IS_CHROME;
+
+// ── TOGGLE VOICE MODE ────────────────────────────────────────────────────────
+function toggleVoice(on) {
+  voiceEnabled = on;
+  const panel = document.getElementById("voicePanel");
+  panel.classList.toggle("visible", on);
+
+  if (on && !STT_SUPPORTED) {
+    document.getElementById("voiceUnsupported").style.display = "block";
+  }
+
+  if (!on) {
+    stopTTS();
+    stopMic();
+    return;
+  }
+
+  // ── Voice mode just switched ON on the welcome screen ──
+  // Read the introduction immediately so the respondent knows what this is about
+  const onWelcome = document.getElementById("screen-welcome").classList.contains("active");
+  if (on && onWelcome) {
+    const welcomeIntro =
+      "Voice mode is now on. " +
+      "Welcome to the ML-CAT adaptive assessment. " +
+      "This assessment is designed to assess your level of anxiety or depression " +
+      "by asking only the most relevant 3 to 4 questions from the tool. " +
+      "Your responses will be calculated to estimate the score that may be used for clinical monitoring. " +
+      "For each question, please think about how often you have been bothered over the past two weeks. " +
+      "You may answer by tapping a choice on screen, or by speaking your answer into the microphone. " +
+      "Please select Anxiety or Depression to begin.";
+    setTimeout(() => speak(welcomeIntro), 400);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  TEXT-TO-SPEECH (TTS)
+// ════════════════════════════════════════════════════════════════════════════
+// ── Cached voice list (populated once voices load) ──
+let _cachedVoices = [];
+
+function _loadVoices() {
+  const v = speechSynthesis.getVoices();
+  if (v.length > 0) _cachedVoices = v;
+}
+
+// Edge & Safari load voices asynchronously — must wait for voiceschanged event
+if ("speechSynthesis" in window) {
+  speechSynthesis.addEventListener("voiceschanged", _loadVoices);
+  // Also try immediately (Chrome often has them on first call)
+  _loadVoices();
+}
+
+function _pickVoice() {
+  _loadVoices();
+  const voices = _cachedVoices;
+  if (voices.length === 0) return null;
+
+  // ── Strict priority: Singapore English female ──
+
+  // 1. en-SG female (name contains female/woman-style keywords)
+  let v = voices.find(v =>
+    v.lang === "en-SG" &&
+    /female|woman|girl|samantha|karen|moira|serena|zira|hazel|susan|victoria|fiona/i.test(v.name)
+  );
+
+  // 2. Any en-SG voice (male or female — still Singapore accent)
+  if (!v) v = voices.find(v => v.lang === "en-SG");
+  if (!v) v = voices.find(v => v.lang.toLowerCase() === "en-sg");
+  if (!v) v = voices.find(v => /singapore/i.test(v.name));
+
+  // 3. Fallback: en-GB female (closest accent to SG English)
+  if (!v) v = voices.find(v =>
+    /^en-GB/i.test(v.lang) &&
+    /female|woman|hazel|susan|kate|serena/i.test(v.name)
+  );
+  // 4. Any en-GB
+  if (!v) v = voices.find(v => /^en-GB/i.test(v.lang));
+  // 5. Any English female
+  if (!v) v = voices.find(v =>
+    /^en/i.test(v.lang) &&
+    /female|woman|samantha|karen|moira|victoria|fiona/i.test(v.name)
+  );
+  // 6. Any English
+  if (!v) v = voices.find(v => /^en/i.test(v.lang));
+  // 7. Absolute fallback
+  if (!v) v = voices.find(v => v.default) || voices[0];
+
+  return v || null;
+}
+
+function speak(text, onEnd) {
+  if (!TTS_SUPPORTED) return;
+
+  // Edge has a bug where speechSynthesis gets stuck after tab switch.
+  // Calling cancel() then waiting 1 tick before speaking fixes it.
+  speechSynthesis.cancel();
+
+  const _doSpeak = () => {
+    const utt   = new SpeechSynthesisUtterance(text);
+    utt.lang    = "en-SG";
+    utt.rate    = 0.92;
+    utt.pitch   = 1.0;
+    utt.volume  = 1.0;
+
+    const voice = _pickVoice();
+    if (voice) utt.voice = voice;
+
+    utt.onstart = () => {
+      ttsActive = true;
+      document.querySelectorAll(".tts-btn").forEach(b => b.classList.remove("speaking-tts"));
+    };
+    utt.onend = () => {
+      ttsActive = false;
+      document.querySelectorAll(".tts-btn").forEach(b => b.classList.remove("speaking-tts"));
+      if (typeof onEnd === "function") onEnd();
+    };
+    utt.onerror = (e) => {
+      // "interrupted" is normal when cancel() is called — not a real error
+      if (e.error === "interrupted" || e.error === "canceled") return;
+      ttsActive = false;
+      document.querySelectorAll(".tts-btn").forEach(b => b.classList.remove("speaking-tts"));
+      if (typeof onEnd === "function") onEnd();
+    };
+
+    try {
+      speechSynthesis.speak(utt);
+    } catch(err) {
+      console.warn("speak() error:", err);
+    }
+
+    // Edge / Chrome bug: speechSynthesis sometimes stalls on long text.
+    // Workaround: call resume() after a short delay.
+    setTimeout(() => {
+      if (speechSynthesis.paused) speechSynthesis.resume();
+    }, 150);
+  };
+
+  // Small delay after cancel() so Edge has time to clear its queue
+  setTimeout(_doSpeak, 50);
+}
+
+function stopTTS() {
+  if (TTS_SUPPORTED) speechSynthesis.cancel();
+  ttsActive = false;
+}
+
+function readCurrentQuestion() {
+  const node = state.tree[state.curNode];
+  if (!node || node.type !== "question") return;
+  const scaleAbbr = state.scale === "GAD7" ? "GAD" : "PHQ";
+  const text = "Over the past two weeks, how often have you been bothered by the following? " + state.items[node.item] + ".";
+  document.getElementById("btnReadQuestion").classList.add("speaking-tts");
+  speak(text, () => {
+    document.getElementById("btnReadQuestion").classList.remove("speaking-tts");
+  });
+}
+
+function readChoices() {
+  const text = "Your options are: " +
+    "Zero — Not at all. " +
+    "One — Several days. " +
+    "Two — More than half the days. " +
+    "Three — Nearly every day.";
+  document.getElementById("btnReadChoices").classList.add("speaking-tts");
+  speak(text, () => {
+    document.getElementById("btnReadChoices").classList.remove("speaking-tts");
+  });
+}
+
+function readResult(score, severity, scale) {
+  const text = `Assessment complete. Your estimated ${scale} score is ${score}, indicating ${severity}. ` +
+    (score >= 10
+      ? "This score is above the clinical threshold of 10 and warrants attention."
+      : "This score is below the clinical threshold of 10.");
+  speak(text);
+}
+
+// Auto-read question when rendered in voice mode
+function voiceAutoRead() {
+  if (!voiceEnabled || !autoReadNext) return;
+  const node = state.tree[state.curNode];
+  if (!node || node.type !== "question") return;
+  // Short delay to let DOM render first
+  setTimeout(() => {
+    const text = "Over the past two weeks, how often have you been bothered by the following? " + state.items[node.item] +
+      ". Please say: Not at all, Several days, More than half the days, or Nearly every day. Or say a number from zero to three.";
+    speak(text);
+  }, 400);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SPEECH-TO-TEXT (STT)
+// ════════════════════════════════════════════════════════════════════════════
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+
+  const r = new SR();
+  r.lang       = "en-SG";
+  r.continuous = false;
+  r.interimResults = true;
+
+  r.onstart = () => {
+    isListening = true;
+    setMicState("listening");
+    setTranscript("Listening…", false);
+  };
+
+  r.onresult = (event) => {
+    let interim = "", final = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    setTranscript(final || interim, !!final);
+    if (final) processVoiceCommand(final.trim().toLowerCase());
+  };
+
+  r.onerror = (e) => {
+    setMicState("idle");
+    isListening = false;
+    if (e.error === "not-allowed") {
+      setTranscript("Microphone permission denied. Please allow microphone access.", false);
+    } else if (e.error !== "no-speech") {
+      setTranscript("Error: " + e.error + ". Try again.", false);
+    }
+  };
+
+  r.onend = () => {
+    isListening = false;
+    setMicState("idle");
+  };
+
+  return r;
+}
+
+function toggleMic() {
+  if (!STT_SUPPORTED) {
+    document.getElementById("voiceUnsupported").style.display = "block";
+    return;
+  }
+  if (isListening) {
+    stopMic();
+  } else {
+    stopTTS();
+    recognition = initRecognition();
+    if (recognition) {
+      try { recognition.start(); }
+      catch(e) { console.warn("Recognition start error:", e); }
+    }
+  }
+}
+
+function stopMic() {
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
+  }
+  isListening = false;
+  setMicState("idle");
+}
+
+function setMicState(state_str) {
+  const btn    = document.getElementById("micBtn");
+  const status = document.getElementById("micStatus");
+  const wave   = document.getElementById("waveform");
+
+  btn.className = "mic-btn";
+  status.className = "mic-status";
+  wave.classList.remove("active");
+
+  if (state_str === "listening") {
+    btn.classList.add("listening");
+    btn.textContent = "🔴";
+    status.textContent = "Listening… speak now";
+    status.classList.add("listening");
+    wave.classList.add("active");
+  } else if (state_str === "speaking") {
+    btn.classList.add("speaking");
+    btn.textContent = "🔊";
+    status.textContent = "Processing…";
+    status.classList.add("speaking");
+  } else {
+    btn.textContent = "🎤";
+    status.textContent = "Tap mic to speak your answer";
+  }
+}
+
+function setTranscript(text, isFinal) {
+  const el = document.getElementById("transcript");
+  el.textContent = text || "Waiting for speech…";
+  el.className = "transcript-bubble" + (isFinal && text ? " has-text" : "");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  VOICE COMMAND PARSER
+// ════════════════════════════════════════════════════════════════════════════
+function processVoiceCommand(text) {
+  setMicState("speaking");
+
+  // ── Score by label ──
+  const scoreMap = [
+    { patterns: ["not at all", "zero", "0", "none", "never"],          val: 0 },
+    { patterns: ["several days", "one", "1", "sometimes", "a few days"],val: 1 },
+    { patterns: ["more than half", "two", "2", "most days", "half"],    val: 2 },
+    { patterns: ["nearly every day", "three", "3", "every day", "always", "daily"], val: 3 }
+  ];
+
+  for (const entry of scoreMap) {
+    if (entry.patterns.some(p => text.includes(p))) {
+      const node = state.tree[state.curNode];
+      if (node && node.type === "question") {
+        selectChoice(entry.val, node.item);
+        speak("Got it. " + CHOICE_LABELS[entry.val] + ".", () => {
+          setMicState("idle");
+        });
+        return;
+      }
+    }
+  }
+
+  // ── Navigation commands ──
+  if (/\b(next|continue|proceed|go)\b/.test(text)) {
+    if (state.selectedVal !== null) {
+      speak("Moving to next question.", () => { setMicState("idle"); goNext(); });
+    } else {
+      speak("Please select an answer first.", () => setMicState("idle"));
+    }
+    return;
+  }
+
+  if (/\bback\b/.test(text)) {
+    speak("Going back.", () => { setMicState("idle"); goBack(); });
+    return;
+  }
+
+  if (/\b(read|repeat|again|question)\b/.test(text)) {
+    setMicState("idle");
+    readCurrentQuestion();
+    return;
+  }
+
+  if (/\b(choices|options|answers)\b/.test(text)) {
+    setMicState("idle");
+    readChoices();
+    return;
+  }
+
+  // ── Not recognised ──
+  speak("Sorry, I didn't catch that. Please say a number from zero to three, or say the answer.", () => {
+    setMicState("idle");
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PDF REPORT GENERATOR
+//  Uses jsPDF (loaded from CDN) — generates entirely in the browser.
+//  Produces a clinical-style A4 report with:
+//    • IMH header + assessment metadata
+//    • Score hero with severity
+//    • Clinical threshold flag
+//    • Items administered table
+//    • Model accuracy footnote
+// ════════════════════════════════════════════════════════════════════════════
+function downloadPDF() {
+  const r = state.result;
+  if (!r) return;
+
+  // Show spinner
+  const btn = document.getElementById("btnPDF");
+  btn.classList.add("generating");
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+
+  // Small timeout so UI updates before heavy PDF work
+  setTimeout(() => {
+    try {
+      _buildPDF(r);
+    } catch(e) {
+      console.error("PDF error:", e);
+      alert("PDF generation failed: " + e.message);
+    }
+    btn.classList.remove("generating");
+    btn.innerHTML = "🖨️ PDF Report";
+  }, 80);
+}
+
+function _buildPDF(r) {
+  const { jsPDF } = window.jspdf;
+  const doc  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const W    = 210;   // A4 width mm
+  const MARGIN = 18;
+  const CW   = W - MARGIN * 2;  // content width
+  let   y    = 0;               // current Y position
+
+  const scaleAbbr  = r.scale === "GAD7" ? "GAD-7" : "PHQ-8";
+  const scaleFull  = r.scale === "GAD7" ? "Generalised Anxiety Disorder-7" : "Patient Health Questionnaire-8";
+  const scoreMax   = r.maxScore;
+  const flagHi     = r.estScore >= 10;
+  const dateStr    = new Date(r.timestamp).toLocaleString("en-SG", {
+    day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"
+  });
+
+  // ── Helper: hex to RGB ──
+  function hexRGB(hex) {
+    const h = hex.replace("#","");
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+  function setFill(hex) { const [r,g,b] = hexRGB(hex); doc.setFillColor(r,g,b); }
+  function setTxt(hex)  { const [r,g,b] = hexRGB(hex); doc.setTextColor(r,g,b); }
+  function setDraw(hex) { const [r,g,b] = hexRGB(hex); doc.setDrawColor(r,g,b); }
+
+  // ── PAGE: dark navy header band ──
+  setFill("#1B4F72");
+  doc.rect(0, 0, W, 28, "F");
+
+  setTxt("#FFFFFF");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(16);
+  doc.text("ML-CAT Assessment Report", MARGIN, 12);
+
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(8.5);
+  doc.text(scaleAbbr + " · " + scaleFull, MARGIN, 19);
+  doc.text("Institute of Mental Health, Singapore · Abdin et al. (N=502)", MARGIN, 24);
+
+  // right-aligned date
+  doc.setFontSize(8);
+  const dw = doc.getTextWidth(dateStr);
+  doc.text(dateStr, W - MARGIN - dw, 16);
+
+  y = 36;
+
+  // ── Patient info box ──
+  setFill("#F0F7FF");
+  setDraw("#BEE3F8");
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, CW, 20, 3, 3, "FD");
+
+  setTxt("#1B4F72");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(8.5);
+  const col2 = MARGIN + CW/2 + 4;
+
+  doc.text("Patient / Respondent ID", MARGIN + 5, y + 7);
+  doc.text("Clinician", col2, y + 7);
+
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(10);
+  setTxt("#0F172A");
+  doc.text(r.patientId || "—", MARGIN + 5, y + 14);
+  doc.text(r.clinician  || "—", col2, y + 14);
+
+  y += 28;
+
+  // ── Score hero box ──
+  const sevColMap = {
+    min:  { bg: "#D5F5E3", border: "#82E0AA", txt: "#1D6A39" },
+    mild: { bg: "#FEF9E7", border: "#F9E79F", txt: "#B7950B" },
+    mod:  { bg: "#FDEBD0", border: "#FAD7A0", txt: "#CA6F1E" },
+    sev:  { bg: "#FADBD8", border: "#F5B7B1", txt: "#C0392B" }
+  };
+  const sevKey = /low|minimal/i.test(r.severity) ? "min"
+    : /mild/i.test(r.severity) ? "mild"
+    : /moderate/i.test(r.severity) ? "mod" : "sev";
+  const sevCol = sevColMap[sevKey];
+
+  setFill(sevCol.bg);
+  setDraw(sevCol.border);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(MARGIN, y, CW, 36, 4, 4, "FD");
+
+  // big score number
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(38);
+  const [sr,sg,sb] = hexRGB("#1B4F72");
+  doc.setTextColor(sr,sg,sb);
+  const scoreStr = String(r.estScore);
+  const sw = doc.getTextWidth(scoreStr);
+  doc.text(scoreStr, MARGIN + CW/2 - sw/2, y + 22);
+
+  // /max
+  doc.setFontSize(13);
+  setTxt("#718096");
+  doc.text("/" + scoreMax, MARGIN + CW/2 + sw/2 + 1, y + 22);
+
+  // severity label centred below score
+  doc.setFontSize(10.5);
+  doc.setFont("helvetica","bold");
+  const [tr2,tg2,tb2] = hexRGB(sevCol.txt);
+  doc.setTextColor(tr2,tg2,tb2);
+  const sevW = doc.getTextWidth(r.severity);
+  doc.text(r.severity, MARGIN + CW/2 - sevW/2, y + 30);
+
+  y += 44;
+
+  // ── Clinical threshold banner ──
+  const flagBg     = flagHi ? "#FADBD8" : "#D5F5E3";
+  const flagBorder = flagHi ? "#F5B7B1" : "#82E0AA";
+  const flagTxt    = flagHi ? "#7B241C" : "#1D6A39";
+  const flagMsg    = flagHi
+    ? "Score >= 10 — Above clinical threshold. Warrants clinical attention."
+    : "Score < 10 — Below clinical threshold. Continue monitoring.";
+
+  setFill(flagBg);
+  setDraw(flagBorder);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, CW, 10, 2, 2, "FD");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(9);
+  const [fr,fg,fb] = hexRGB(flagTxt);
+  doc.setTextColor(fr,fg,tb2);
+  doc.text(flagMsg, MARGIN + 4, y + 6.5);
+
+  y += 18;
+
+  // ── Stats row (3 boxes) ──
+  const reduction = parseInt(r.reduction);
+  const stats = [
+    { val: String(r.estScore), lbl: "Estimated Score" },
+    { val: String(r.nItems),   lbl: "Items Used" },
+    { val: r.reduction,        lbl: "Item Reduction" }
+  ];
+  const bw = (CW - 8) / 3;
+  stats.forEach((s, i) => {
+    const bx = MARGIN + i * (bw + 4);
+    setFill("#EEF2F7");
+    setDraw("#E2E8F0");
+    doc.setLineWidth(0.2);
+    doc.roundedRect(bx, y, bw, 16, 2, 2, "FD");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(13);
+    setTxt("#1B4F72");
+    const vw = doc.getTextWidth(s.val);
+    doc.text(s.val, bx + bw/2 - vw/2, y + 9);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(7.5);
+    setTxt("#718096");
+    const lw = doc.getTextWidth(s.lbl);
+    doc.text(s.lbl, bx + bw/2 - lw/2, y + 14);
+  });
+
+  y += 24;
+
+  // ── Items administered table ──
+  setTxt("#1B4F72");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(10);
+  doc.text("Items Administered", MARGIN, y);
+  y += 5;
+
+  // Table header
+  setFill("#1B4F72");
+  doc.rect(MARGIN, y, CW, 8, "F");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(8.5);
+  setTxt("#FFFFFF");
+  doc.text("Item", MARGIN + 3, y + 5.5);
+  doc.text("Question", MARGIN + 22, y + 5.5);
+  doc.text("Response", MARGIN + CW - 26, y + 5.5);
+  y += 8;
+
+  const scaleItems = r.scale === "GAD7" ? {
+    "1":"Feeling nervous, anxious, or on edge",
+    "2":"Not being able to stop or control worrying",
+    "3":"Worrying too much about different things",
+    "4":"Trouble relaxing",
+    "5":"Being so restless that it is hard to sit still",
+    "6":"Becoming easily annoyed or irritable",
+    "7":"Feeling afraid, as if something awful might happen"
+  } : {
+    "1":"Little interest or pleasure in doing things",
+    "2":"Feeling down, depressed, or hopeless",
+    "3":"Trouble falling or staying asleep, or sleeping too much",
+    "4":"Feeling tired or having little energy",
+    "5":"Poor appetite or overeating",
+    "6":"Feeling bad about yourself",
+    "7":"Trouble concentrating on things",
+    "8":"Moving or speaking so slowly others could notice"
+  };
+  const CHOICE_LABELS_PDF = ["Not at all","Several days","More than half the days","Nearly every day"];
+  const scaleA = r.scale === "GAD7" ? "GAD" : "PHQ";
+
+  Object.entries(r.responses).forEach(([item, val], i) => {
+    const rowBg = i % 2 === 0 ? "#F8FAFC" : "#FFFFFF";
+    setFill(rowBg);
+    setDraw("#E2E8F0");
+    doc.setLineWidth(0.15);
+    doc.rect(MARGIN, y, CW, 9, "FD");
+
+    setTxt("#2471A3");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(8);
+    doc.text(scaleA + " " + item, MARGIN + 3, y + 5.5);
+
+    // Truncate long question text
+    const qText = scaleItems[item] || "";
+    const maxQW = CW - 50;
+    let   qDisp = qText;
+    doc.setFont("helvetica","normal");
+    setTxt("#1A202C");
+    doc.setFontSize(8);
+    while (doc.getTextWidth(qDisp) > maxQW && qDisp.length > 10) {
+      qDisp = qDisp.slice(0, -4) + "…";
+    }
+    doc.text(qDisp, MARGIN + 22, y + 5.5);
+
+    // Score + label
+    const scoreColour = ["#1E8449","#2471A3","#CA6F1E","#C0392B"][val] || "#1A202C";
+    const [cr,cg,cb]  = hexRGB(scoreColour);
+    doc.setTextColor(cr,cg,cb);
+    doc.setFont("helvetica","bold");
+    doc.text(val + " — " + CHOICE_LABELS_PDF[val], MARGIN + CW - 26, y + 5.5);
+
+    y += 9;
+  });
+
+  y += 8;
+
+  // ── Leaf formula line ──
+  setTxt("#718096");
+  doc.setFont("helvetica","italic");
+  doc.setFontSize(7.5);
+  doc.text("Leaf node: " + r.leafNode + "  ·  Accuracy: " + r.accuracy + "  ·  Model: M5P (Abdin et al., IMH Singapore, N=502)", MARGIN, y);
+
+  y += 8;
+
+  // ── Disclaimer box ──
+  setFill("#FFFBEB");
+  setDraw("#FCD34D");
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, CW, 14, 2, 2, "FD");
+  setTxt("#92400E");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(7.5);
+  doc.text("CLINICAL DISCLAIMER", MARGIN + 4, y + 5);
+  doc.setFont("helvetica","normal");
+  doc.text("For clinical monitoring purposes only. Estimated scores use the ML-CAT adaptive model. Does not replace clinical judgment.", MARGIN + 4, y + 10);
+
+  // ── Footer ──
+  const footerY = 287;
+  setFill("#1B4F72");
+  doc.rect(0, footerY, W, 10, "F");
+  setTxt("#FFFFFF");
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(7.5);
+  doc.text("ML-CAT · Institute of Mental Health, Singapore · Generated " + dateStr, MARGIN, footerY + 6.5);
+  const pgW = doc.getTextWidth("Page 1");
+  doc.text("Page 1", W - MARGIN - pgW, footerY + 6.5);
+
+  // ── Save ──
+  const pid    = r.patientId ? "_" + r.patientId.replace(/[^a-zA-Z0-9]/g,"") : "";
+  doc.save(r.scale + "_MLCAT" + pid + "_" + formatDate() + ".pdf");
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WHATSAPP SHARE
+//  Strategy:
+//    1. Try Web Share API (Android/iOS Chrome & Safari) — shares PDF file
+//    2. If Web Share not available — open WhatsApp with pre-filled text
+//       (wa.me URL works on all platforms)
+// ════════════════════════════════════════════════════════════════════════════
+async function shareWhatsApp() {
+  const r = state.result;
+  if (!r) return;
+
+  const btn = document.getElementById("btnWhatsApp");
+  btn.classList.add("generating");
+  btn.innerHTML = '<span class="spinner"></span> Preparing…';
+
+  const scaleAbbr = r.scale === "GAD7" ? "GAD-7" : "PHQ-8";
+  const flagEmoji = r.estScore >= 10 ? "🔴" : "🟢";
+  const dateStr   = new Date(r.timestamp).toLocaleString("en-SG", {
+    day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"
+  });
+
+  // Build the text summary
+  const itemLines = Object.entries(r.responses).map(([item, val]) => {
+    const scaleItems = r.scale === "GAD7" ? {
+      "1":"Nervous/anxious","2":"Can't stop worrying","3":"Worrying too much",
+      "4":"Trouble relaxing","5":"Restless","6":"Easily irritable","7":"Feeling afraid"
+    } : {
+      "1":"Little interest","2":"Feeling down","3":"Sleep problems",
+      "4":"Tired/little energy","5":"Appetite issues","6":"Feeling bad about self",
+      "7":"Trouble concentrating","8":"Slow/fidgety"
+    };
+    const labels = ["Not at all","Several days","More than half","Nearly every day"];
+    return `• ${r.scale === "GAD7" ? "GAD" : "PHQ"} Item ${item}: ${labels[val]} (${val})`;
+  }).join("\n");
+
+  const msg = [
+    `*ML-CAT Assessment Result*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `📋 *Scale:* ${scaleAbbr}`,
+    r.patientId ? `👤 *Patient ID:* ${r.patientId}` : null,
+    r.clinician  ? `👨‍⚕️ *Clinician:* ${r.clinician}` : null,
+    `🕐 *Date/Time:* ${dateStr}`,
+    ``,
+    `📊 *Estimated Score:* ${r.estScore}/${r.maxScore}`,
+    `🏷️ *Severity:* ${r.severity}`,
+    `${flagEmoji} *Clinical Flag:* ${r.estScore >= 10 ? "Score ≥ 10 — warrants attention" : "Score < 10 — below threshold"}`,
+    ``,
+    `*Items Administered (${r.nItems} of ${r.scale === "GAD7" ? 7 : 8}):*`,
+    itemLines,
+    ``,
+    `📉 *Item reduction:* ${r.reduction}`,
+    `🔬 *Model accuracy:* ${r.accuracy}`,
+    ``,
+    `_Generated by ML-CAT · IMH Singapore · Abdin et al._`,
+    `_Does not replace clinical judgment._`
+  ].filter(l => l !== null).join("\n");
+
+  // ── Try Web Share API first (works on mobile Chrome/Safari) ──
+  if (navigator.share) {
+    try {
+      // Try sharing as a file (PDF) — supported on Android Chrome
+      if (navigator.canShare && window.jspdf) {
+        try {
+          const pdfBlob = await _buildPDFBlob(r);
+          const file    = new File([pdfBlob], `${r.scale}_MLCAT_${formatDate()}.pdf`, { type: "application/pdf" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ title: `ML-CAT ${scaleAbbr} Report`, text: msg, files: [file] });
+            btn.classList.remove("generating");
+            btn.innerHTML = "💬 WhatsApp";
+            return;
+          }
+        } catch(e) { /* Fall through to text-only share */ }
+      }
+      // Text-only share
+      await navigator.share({ title: `ML-CAT ${scaleAbbr} Result`, text: msg });
+      btn.classList.remove("generating");
+      btn.innerHTML = "💬 WhatsApp";
+      return;
+    } catch(e) {
+      if (e.name !== "AbortError") {
+        /* Fall through to WhatsApp URL */ 
+      } else {
+        btn.classList.remove("generating");
+        btn.innerHTML = "💬 WhatsApp";
+        return;
+      }
+    }
+  }
+
+  // ── Fallback: open WhatsApp with pre-filled message ──
+  const encoded = encodeURIComponent(msg);
+  window.open("https://wa.me/?text=" + encoded, "_blank");
+
+  btn.classList.remove("generating");
+  btn.innerHTML = "💬 WhatsApp";
+}
+
+// Build jsPDF as a Blob (for Web Share API file sharing) without saving
+async function _buildPDFBlob(r) {
+  return new Promise((resolve, reject) => {
+    try {
+      const { jsPDF } = window.jspdf;
+      // Re-use the same build logic but return blob instead of saving
+      // We call the internal helper and intercept output
+      const doc  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      // For blob sharing we do a simplified version — just text summary
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(16);
+      doc.text("ML-CAT Assessment Report", 18, 20);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(11);
+      const scaleAbbr = r.scale === "GAD7" ? "GAD-7" : "PHQ-8";
+      doc.text(`Scale: ${scaleAbbr}  |  Score: ${r.estScore}/${r.maxScore}  |  ${r.severity}`, 18, 32);
+      const blob = doc.output("blob");
+      resolve(blob);
+    } catch(e) { reject(e); }
+  });
+}
+
+</script>
+</body>
+</html>
